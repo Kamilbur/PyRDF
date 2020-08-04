@@ -1,0 +1,12 @@
+name: test
+channels:
+  - https://root.cern/download/conda-nightly/latest
+  - conda-forge
+  - defaults
+dependencies:
+  - openjdk=11
+  - pyspark=3
+  - flake8
+  - pytest
+  - numpy
+  - root=6.23

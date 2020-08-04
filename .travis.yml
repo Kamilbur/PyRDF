@@ -10,15 +10,11 @@ matrix:
     # should currently be able to use Python 2.6, 2.7, or 3.3 or later.
 
     - stage: 'style checks'
-      python: '2.7.15'
+      python: '3.8'
       language: python
       env: TEST_SUITE=flake8
     - stage: 'unit tests'
-      python: '2.7.15'
-      env: TEST_SUITE=unit
-      language: python
-    - python: '3.7'
-      os: linux
+      python: '3.8'
       language: python
       env: TEST_SUITE=unit
 
@@ -43,7 +39,7 @@ install:
   # We just set up a conda environment with the right Python version. This
   # should not need changing.
 
-  - conda env create -f conda-python-$TRAVIS_PYTHON_VERSION-test-env.yaml -n test
+  - conda env create -f conda-python-$TRAVIS_PYTHON_VERSION-test-env.yaml
   - source activate test
 
 script:
