@@ -64,6 +64,9 @@ def use(backend_name, conf={}):
     elif backend_name == "spark":
         from PyRDF.backend.Spark import Spark
         current_backend = Spark(conf)
+    elif backend_name == "AWS":
+        from PyRDF.backend.AWS import AWS
+        current_backend = AWS(conf)
     else:
         msg = "Incorrect backend environment \"{}\"".format(backend_name)
         raise Exception(msg)
