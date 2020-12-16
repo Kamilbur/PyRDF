@@ -101,7 +101,7 @@ class AWS(Dist):
         s3 = boto3.client('s3', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
         ssm = boto3.client('ssm', region_name='us-east-1')
-        s3_output_bucket = ssm.get_parameter(Name='output_bucket')
+        s3_output_bucket = ssm.get_parameter(Name='output_bucket')['Parameter']['Value']
         if not s3_output_bucket:
             print('AWS backend not initialized!')
             return False
