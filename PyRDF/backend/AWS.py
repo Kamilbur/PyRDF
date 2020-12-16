@@ -1,10 +1,10 @@
 from __future__ import print_function
 
 import json
-import cloudpickle as pickle
 import time
 
 import boto3
+import cloudpickle as pickle
 
 from PyRDF.backend.Dist import Dist
 
@@ -97,16 +97,16 @@ class AWS(Dist):
         pickled_mapper = pickle.dumps(mapper)
         pickled_reducer = pickle.dumps(reducer)
 
-        s3 = boto3.client('s3',region_name='us-east-1')
-        lambda_client = boto3.client('lambda',region_name='us-east-1')
-        ssm = boto3.client('ssm',region_name='us-east-1')
+        s3 = boto3.client('s3', region_name='us-east-1')
+        lambda_client = boto3.client('lambda', region_name='us-east-1')
+        ssm = boto3.client('ssm', region_name='us-east-1')
         s3_output_bucket = ssm.get_parameter(Name='output_bucket')
         if not s3_output_bucket:
             print('AWS backend not initialized!')
             return False
 
-        ssm.put_parameter(Name='ranges_num', Value=str(len(ranges)))
-        ssm.put_parameter(Name='reducer', Value=pickled_reducer.decode('utf-8'))
+        ssm.put_parameter(Name='ranges_num', Type='String', Value=str(len(ranges)))
+        ssm.put_parameter(Name='reducer', Type='String', Value=pickled_reducer.decode('utf-8'))
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
