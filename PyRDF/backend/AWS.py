@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import base64
 import json
 import time
 
@@ -106,7 +107,7 @@ class AWS(Dist):
             return False
 
         ssm.put_parameter(Name='ranges_num', Type='String', Value=str(len(ranges)))
-        ssm.put_parameter(Name='reducer', Type='String', Value=pickled_reducer.decode('utf-8'))
+        ssm.put_parameter(Name='reducer', Type='String', Value=base64.b64encode(pickled_reducer))
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
