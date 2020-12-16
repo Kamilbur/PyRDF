@@ -142,7 +142,7 @@ class AWS(Dist):
 
         while True:
             results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
-            if len(results['Contents']) > 0:
+            if results['KeyCount'] > 0:
                 break
             print("still waiting")
             time.sleep(1)
