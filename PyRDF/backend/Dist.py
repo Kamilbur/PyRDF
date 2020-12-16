@@ -534,8 +534,7 @@ class Dist(Backend):
                     # Sum() always returns a float in python
                     values_list1[i] += values_list2[i]
 
-                elif (isinstance(values_list1[i], int) or
-                        isinstance(values_list1[i], long)):  # noqa: Python 2
+                elif (isinstance(values_list1[i], int)):  # noqa: Python 2
                     # Adding values resulting from a Count() operation
                     values_list1[i] += values_list2[i]
 

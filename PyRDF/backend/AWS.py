@@ -144,6 +144,7 @@ class AWS(Dist):
             results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
             if len(results['Contents']) > 0:
                 break
+            print("still waiting")
             time.sleep(1)
 
         result = s3.get_object(s3_output_bucket, 'out.pickle')
