@@ -164,15 +164,18 @@ class AWS(Dist):
             pickle.loads(s3.get_object(
                 Bucket=processing_bucket,
                 Key=filenames[0]['Key']
-            )['Body']),
+            )['Body'].read()),
             pickle.loads(s3.get_object(
                 Bucket=processing_bucket,
                 Key=filenames[1]['Key']
-            )['Body'])
+            )['Body'].read())
         )
 
         for filename in filenames[2:]:
-            file = pickle.loads(s3.get_object(Bucket=processing_bucket, Key=filename['Key'])['Body'])
+            file = pickle.loads(s3.get_object(
+                Bucket=processing_bucket,
+                Key=filename['Key']
+            )['Body'].read())
             accumulator = reducer(accumulator, file)
 
         # s3.Bucket(processing_bucket).objects.all().delete()
