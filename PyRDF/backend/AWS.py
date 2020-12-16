@@ -53,7 +53,7 @@ class AWS(Dist):
         self.npartitions = self._get_partitions()
 
     def _get_partitions(self):
-        return self.npartitions or AWS.MIN_NPARTITIONS
+        return int(self.npartitions or AWS.MIN_NPARTITIONS)
 
     def ProcessAndMerge(self, mapper, reducer):
         """
