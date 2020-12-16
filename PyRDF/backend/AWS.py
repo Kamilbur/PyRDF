@@ -97,9 +97,9 @@ class AWS(Dist):
         pickled_mapper = pickle.dumps(mapper)
         pickled_reducer = pickle.dumps(reducer)
 
-        s3 = boto3.client('s3')
-        lambda_client = boto3.client('lambda')
-        ssm = boto3.client('ssm')
+        s3 = boto3.client('s3',region_name='us-east-1')
+        lambda_client = boto3.client('lambda',region_name='us-east-1')
+        ssm = boto3.client('ssm',region_name='us-east-1')
         s3_output_bucket = ssm.get_parameter('output_bucket')
         if not s3_output_bucket:
             print('AWS backend not initialized!')
