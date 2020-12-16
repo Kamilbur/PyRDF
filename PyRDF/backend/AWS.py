@@ -95,8 +95,8 @@ class AWS(Dist):
             '''
 
         # Map-Reduce using AWS
-        pickled_mapper = base64.decodebytes(pickle.dumps(mapper))
-        pickled_reducer = base64.decodebytes(pickle.dumps(reducer))
+        pickled_mapper = base64.b64encode(pickle.dumps(mapper))
+        pickled_reducer = base64.b64encode(pickle.dumps(reducer))
 
         s3 = boto3.client('s3', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
@@ -135,7 +135,7 @@ class AWS(Dist):
 
         call_results = []
         for root_range in ranges:
-            call_result = invoke_root_lambda(lambda_client, base64.decodebytes(pickle.dumps(root_range)), pickled_mapper)
+            call_result = invoke_root_lambda(lambda_client, base64.b64encode(pickle.dumps(root_range)), pickled_mapper)
             call_results.append(call_result)
 
         while True:
