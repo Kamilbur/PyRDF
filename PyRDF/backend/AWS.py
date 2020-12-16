@@ -140,17 +140,40 @@ class AWS(Dist):
             call_result = invoke_root_lambda(lambda_client, root_range, pickled_mapper)
             call_results.append(call_result)
 
+        # while True:
+        #     results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
+        #     if results['KeyCount'] > 0:
+        #         break
+        #     print("still waiting")
+        #     time.sleep(1)
+
+        # result = s3.get_object(s3_output_bucket, 'out.pickle')
+
+        processing_bucket = ssm.get_parameter(Name='processing_bucket')['Parameter']['Value']
+
         while True:
-            results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
-            if results['KeyCount'] > 0:
+            results = s3.list_objects_v2(Bucket=processing_bucket)
+            if results['KeyCount'] == len(ranges):
                 break
-            print("still waiting")
+            print("still waiting ", results['KeyCount'])
             time.sleep(1)
 
-        result = s3.get_object(s3_output_bucket, 'out.pickle')
-        reduced_output = pickle.loads(result)
-        # return parallel_collection.map(spark_mapper).treeReduce(reducer)
-        return reduced_output
+        filenames = s3.list_objects_v2(Bucket=processing_bucket)['Contents']
+
+        accumulator = reducer(
+            pickle.loads(s3.get_object(processing_bucket, filenames[0]['Key'])),
+            pickle.loads(s3.get_object(processing_bucket, filenames[1]['Key']))
+        )
+
+        for filename in filenames[2:]:
+            file = pickle.loads(s3.get_object(processing_bucket, filename['Key']))
+            accumulator = reducer(accumulator, file)
+
+        # s3.Bucket(processing_bucket).objects.all().delete()
+
+        return accumulator
+        # reduced_output = pickle.loads(result)
+        # return reduced_output
 
     def distribute_files(self, includes_list):
         pass
