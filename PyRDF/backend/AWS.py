@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import json
-import pickle
+import cloudpickle as pickle
 import time
 
 import boto3
