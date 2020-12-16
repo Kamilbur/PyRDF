@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import base64
 import json
 import time
 
@@ -95,8 +94,8 @@ class AWS(Dist):
             '''
 
         # Map-Reduce using AWS
-        pickled_mapper = pickle.dumps(mapper)
-        pickled_reducer = pickle.dumps(reducer)
+        pickled_mapper = pickle.dumps(mapper, 0)
+        pickled_reducer = pickle.dumps(reducer, 0)
 
         s3 = boto3.client('s3', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
@@ -113,19 +112,19 @@ class AWS(Dist):
             Overwrite=True
         )
 
-        print(str(base64.b64encode(pickled_reducer)))
+        print(str(pickled_reducer))
 
         ssm.put_parameter(
             Name='reducer',
             Type='String',
-            Value=str(base64.b64encode(pickled_reducer)),
+            Value=str(pickled_reducer),
             Overwrite=True
         )
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
-                'range': str(base64.b64encode(root_range)),
-                'script': str(base64.b64encode(script))
+                'range': str(root_range),
+                'script': str(script)
             })
             return client.invoke(
                 FunctionName='root_lambda',
@@ -135,7 +134,7 @@ class AWS(Dist):
 
         call_results = []
         for root_range in ranges:
-            call_result = invoke_root_lambda(lambda_client, pickle.dumps(root_range), pickled_mapper)
+            call_result = invoke_root_lambda(lambda_client, pickle.dumps(root_range, 0), pickled_mapper)
             call_results.append(call_result)
 
         while True:
