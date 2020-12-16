@@ -124,8 +124,8 @@ class AWS(Dist):
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
-                'range': root_range,
-                'script': script
+                'range': str(base64.b64encode(root_range)),
+                'script': str(base64.b64encode(script))
             })
             return client.invoke(
                 FunctionName='root_lambda',
@@ -135,7 +135,7 @@ class AWS(Dist):
 
         call_results = []
         for root_range in ranges:
-            call_result = invoke_root_lambda(lambda_client, root_range, pickled_mapper)
+            call_result = invoke_root_lambda(lambda_client, pickle.dumps(root_range), pickled_mapper)
             call_results.append(call_result)
 
         while True:
