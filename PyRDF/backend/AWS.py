@@ -105,8 +105,8 @@ class AWS(Dist):
             print('AWS backend not initialized!')
             return False
 
-        ssm.put_parameter('ranges_num', len(ranges))
-        ssm.put_parameter('reducer', pickled_reducer)
+        ssm.put_parameter(Name='ranges_num', Value=str(len(ranges)))
+        ssm.put_parameter(Name='reducer', Value=pickled_reducer.decode('utf-8'))
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
