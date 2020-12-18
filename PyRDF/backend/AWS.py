@@ -94,28 +94,30 @@ class AWS(Dist):
             # ranges look like [(0,n,fname),(n+1,2*n,fname)]
             '''
 
-        # Map-Reduce using AWS
-        pickled_mapper = base64.b64encode(pickle.dumps(mapper))
-        pickled_reducer = base64.b64encode(pickle.dumps(reducer))
+        def encode_object(object_to_encode) -> str:
+            return str(base64.b64encode(pickle.dumps(object_to_encode)))
 
-        s3 = boto3.client('s3', region_name='us-east-1')
+        # Map-Reduce using AWS
+        pickled_mapper = encode_object(mapper)
+        pickled_reducer = encode_object(reducer)
+
+        s3_client = boto3.client('s3', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
-        ssm = boto3.client('ssm', region_name='us-east-1')
-        s3_output_bucket = ssm.get_parameter(Name='output_bucket')['Parameter']['Value']
+        ssm_client = boto3.client('ssm', region_name='us-east-1')
+
+        s3_output_bucket = ssm_client.get_parameter(Name='output_bucket')['Parameter']['Value']
         if not s3_output_bucket:
             print('AWS backend not initialized!')
             return False
 
-        ssm.put_parameter(
+        ssm_client.put_parameter(
             Name='ranges_num',
             Type='String',
             Value=str(len(ranges)),
             Overwrite=True
         )
 
-        print(str(pickled_reducer))
-
-        ssm.put_parameter(
+        ssm_client.put_parameter(
             Name='reducer',
             Type='String',
             Value=str(pickled_reducer),
@@ -124,8 +126,8 @@ class AWS(Dist):
 
         def invoke_root_lambda(client, root_range, script):
             payload = json.dumps({
-                'range': str(base64.b64encode(pickle.dumps(root_range))),
-                'script': str(script),
+                'range': encode_object(root_range),
+                'script': script,
                 'start': str(root_range.start),
                 'end': str(root_range.end)
             })
@@ -146,39 +148,32 @@ class AWS(Dist):
         #         break
         #     print("still waiting")
         #     time.sleep(1)
-
         # result = s3.get_object(s3_output_bucket, 'out.pickle')
 
-        processing_bucket = ssm.get_parameter(Name='processing_bucket')['Parameter']['Value']
+        processing_bucket = ssm_client.get_parameter(Name='processing_bucket')['Parameter']['Value']
 
         while True:
-            results = s3.list_objects_v2(Bucket=processing_bucket)
+            results = s3_client.list_objects_v2(Bucket=processing_bucket)
             if results['KeyCount'] == len(ranges):
                 break
             print("still waiting ", results['KeyCount'])
             time.sleep(1)
 
-        filenames = s3.list_objects_v2(Bucket=processing_bucket)['Contents']
+        filenames = s3_client.list_objects_v2(Bucket=processing_bucket)['Contents']
 
-        accumulator = reducer(
-            pickle.loads(s3.get_object(
-                Bucket=processing_bucket,
-                Key=filenames[0]['Key']
-            )['Body'].read()),
-            pickle.loads(s3.get_object(
-                Bucket=processing_bucket,
-                Key=filenames[1]['Key']
-            )['Body'].read())
-        )
+        accumulator = pickle.loads(s3_client.get_object(
+            Bucket=processing_bucket,
+            Key=filenames[0]['Key']
+        )['Body'].read())
 
-        for filename in filenames[2:]:
-            file = pickle.loads(s3.get_object(
+        for filename in filenames[1:]:
+            file = pickle.loads(s3_client.get_object(
                 Bucket=processing_bucket,
                 Key=filename['Key']
             )['Body'].read())
             accumulator = reducer(accumulator, file)
 
-        # s3.Bucket(processing_bucket).objects.all().delete()
+        s3_client.Bucket(processing_bucket).objects.all().delete()
 
         return accumulator
         # reduced_output = pickle.loads(result)
