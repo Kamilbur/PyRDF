@@ -173,7 +173,8 @@ class AWS(Dist):
             )['Body'].read())
             accumulator = reducer(accumulator, file)
 
-        s3_client.Bucket(processing_bucket).objects.all().delete()
+        s3_resource = boto3.resource('s3')
+        s3_resource.Bucket(processing_bucket).objects.all().delete()
 
         return accumulator
         # reduced_output = pickle.loads(result)
