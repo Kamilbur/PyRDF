@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import base64
 import json
-import logging as logger
+import logging
 import time
 
 import boto3
@@ -25,7 +25,7 @@ class AWS(Dist):
         more support will be added in future.
         """
         super(AWS, self).__init__(config)
-        self.logger = logger.getLogger()
+        self.logger = logging.getLogger()
         self.npartitions = self._get_partitions()
         self.region = config.get('region') or 'us-east-1'
 
