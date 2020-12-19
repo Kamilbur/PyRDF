@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import base64
 import json
+import logging as logger
 import time
 
 import boto3
@@ -12,53 +13,28 @@ from PyRDF.backend.Dist import Dist
 
 class AWS(Dist):
     """
-    Backend that executes the computational graph using using `Spark` framework
+    Backend that executes the computational graph using using AWS Lambda
     for distributed execution.
-
     """
 
     MIN_NPARTITIONS = 2
 
     def __init__(self, config={}):
-        '''
-        Creates an instance of the Spark backend class.
-
-        Args:
-            config (dict, optional): The config options for Spark backend.
-                The default value is an empty Python dictionary :obj:`{}`.
-                :obj:`config` should be a dictionary of Spark configuration
-                options and their values with :obj:'npartitions' as the only
-                allowed extra parameter.
-
-        Example::
-
-            config = {
-                'npartitions':20,
-                'spark.master':'myMasterURL',
-                'spark.executor.instances':10,
-                'spark.app.name':'mySparkAppName'
-            }
-
-        Note:
-            If a SparkContext is already set in the current environment, the
-            Spark configuration parameters from :obj:'config' will be ignored
-            and the already existing SparkContext would be used.
-
-        '''
+        """
+        Config for AWS is same as in Dist backend,
+        more support will be added in future.
+        """
         super(AWS, self).__init__(config)
-        #
-        # sparkConf = SparkConf().setAll(config.items())
-        # self.sparkContext = SparkContext.getOrCreate(sparkConf)
-
-        # Set the value of 'npartitions' if it doesn't exist
+        self.logger = logger.getLogger()
         self.npartitions = self._get_partitions()
+        self.region = config.get('region') or 'us-east-1'
 
     def _get_partitions(self):
         return int(self.npartitions or AWS.MIN_NPARTITIONS)
 
     def ProcessAndMerge(self, mapper, reducer):
         """
-        Performs map-reduce using Spark framework.
+        Performs map-reduce using AWS Lambda.
 
         Args:
             mapper (function): A function that runs the computational graph
@@ -74,40 +50,23 @@ class AWS(Dist):
 
         ranges = self.build_ranges()
 
-        ds = '''
-            # mapper and reducer are pickled
-            # TEMP: now i need to inspect ranges to see what files i have to process ?
-            # I need to send scripts to lambdas
-            # each processing Lambda gets: [(range, mapper) for range in ranges]
-            # 1. I run the mapper on ranges and pickles it and outputs pickled version somewhere
-            # reducer gets: (outputs, reducer)
-            # 2. I run the reducer =>
-            # for each partial: unpickle pickled versions |>
-            # apply reducer until all partials processed |>
-            # pickle the result
-            #  and send back to PyRDF
-            # TODO: PROVIDE THE WAY TO GET THE DATA OUTPUT
-            # 3. unpickle value and return to user
-            # Build parallel collection
-            # sc = self.sparkContext
-            # parallel_collection = sc.parallelize(ranges, self.npartitions)
-            # ranges look like [(0,n,fname),(n+1,2*n,fname)]
-            '''
-
         def encode_object(object_to_encode) -> str:
             return str(base64.b64encode(pickle.dumps(object_to_encode)))
 
-        # Map-Reduce using AWS
+        # Make mapper and reducer transferable
         pickled_mapper = encode_object(mapper)
         pickled_reducer = encode_object(reducer)
 
-        s3_client = boto3.client('s3', region_name='us-east-1')
-        lambda_client = boto3.client('lambda', region_name='us-east-1')
-        ssm_client = boto3.client('ssm', region_name='us-east-1')
+        # Setup AWS clients
+        s3_resource = boto3.resource('s3', region_name=self.region)
+        s3_client = boto3.client('s3', region_name=self.region)
+        lambda_client = boto3.client('lambda', region_name=self.region)
+        ssm_client = boto3.client('ssm', region_name=self.region)
 
+        # Check for existence of infrastructure
         s3_output_bucket = ssm_client.get_parameter(Name='output_bucket')['Parameter']['Value']
         if not s3_output_bucket:
-            print('AWS backend not initialized!')
+            self.logger.info('AWS backend not initialized!')
             return False
 
         ssm_client.put_parameter(
@@ -137,6 +96,7 @@ class AWS(Dist):
                 Payload=bytes(payload, encoding='utf8')
             )
 
+        # Invoke workers with ranges and mapper
         call_results = []
         for root_range in ranges:
             call_result = invoke_root_lambda(lambda_client, root_range, pickled_mapper)
@@ -146,21 +106,24 @@ class AWS(Dist):
         #     results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
         #     if results['KeyCount'] > 0:
         #         break
-        #     print("still waiting")
+        #     self.logger.debug("still waiting")
         #     time.sleep(1)
         # result = s3.get_object(s3_output_bucket, 'out.pickle')
 
         processing_bucket = ssm_client.get_parameter(Name='processing_bucket')['Parameter']['Value']
 
+        # Wait until all lambdas finished execution
         while True:
             results = s3_client.list_objects_v2(Bucket=processing_bucket)
             if results['KeyCount'] == len(ranges):
                 break
-            print("still waiting ", results['KeyCount'])
+            self.logger.debug(f'Lambdas finished: {results["KeyCount"]}')
             time.sleep(1)
 
+        # Get names of output files, download and reduce them
         filenames = s3_client.list_objects_v2(Bucket=processing_bucket)['Contents']
 
+        # need better way to do that
         accumulator = pickle.loads(s3_client.get_object(
             Bucket=processing_bucket,
             Key=filenames[0]['Key']
@@ -173,7 +136,7 @@ class AWS(Dist):
             )['Body'].read())
             accumulator = reducer(accumulator, file)
 
-        s3_resource = boto3.resource('s3')
+        # Clean up intermediate objects after we're done
         s3_resource.Bucket(processing_bucket).objects.all().delete()
 
         return accumulator
