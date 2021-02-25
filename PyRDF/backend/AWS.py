@@ -117,7 +117,7 @@ class AWS(Dist):
             results = s3_client.list_objects_v2(Bucket=processing_bucket)
             if results['KeyCount'] == len(ranges):
                 break
-            self.logger.debug(f'Lambdas finished: {results["KeyCount"]}')
+            self.logger.info(f'Lambdas finished: {results["KeyCount"]}')
             time.sleep(1)
 
         # Get names of output files, download and reduce them
