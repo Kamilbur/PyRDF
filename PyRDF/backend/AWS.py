@@ -89,7 +89,8 @@ class AWS(Dist):
                 'script': script,
                 'start': str(root_range.start),
                 'end': str(root_range.end),
-                'filelist': str(root_range.filelist)
+                'filelist': str(root_range.filelist),
+                'friend_info': str(root_range.friend_info)
             })
             return client.invoke(
                 FunctionName='root_lambda',
