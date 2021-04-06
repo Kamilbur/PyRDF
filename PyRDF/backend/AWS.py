@@ -98,11 +98,14 @@ class AWS(Dist):
                 Payload=bytes(payload, encoding='utf8')
             )
 
+        invoke_begin = time.time()
         # Invoke workers with ranges and mapper
         call_results = []
         for root_range in ranges:
             call_result = invoke_root_lambda(lambda_client, root_range, pickled_mapper)
             call_results.append(call_result)
+
+        wait_begin = time.time()
 
         # while True:
         #     results = s3.list_objects_v2(Bucket=s3_output_bucket, Prefix='out.pickle')
@@ -122,6 +125,7 @@ class AWS(Dist):
             self.logger.info(f'Lambdas finished: {results["KeyCount"]}')
             time.sleep(1)
 
+        reduce_begin = time.time()
         # Get names of output files, download and reduce them
         filenames = s3_client.list_objects_v2(Bucket=processing_bucket)['Contents']
 
@@ -140,6 +144,15 @@ class AWS(Dist):
 
         # Clean up intermediate objects after we're done
         s3_resource.Bucket(processing_bucket).objects.all().delete()
+
+        bench = (
+            len(ranges),
+            wait_begin-invoke_begin,
+            reduce_begin-wait_begin,
+            time.time()-reduce_begin
+        )
+
+        print(bench)
 
         return accumulator
         # reduced_output = pickle.loads(result)
