@@ -106,8 +106,10 @@ class AWS(Dist):
         """
 
         def invoke_root_lambda(root_range, script):
-            client = boto3.client('lambda', region_name=self.region)
 
+            trials = 3
+
+            client = boto3.client('lambda', region_name=self.region)
             def process_response(response):
                 if response:
                     if 'Payload' in response:
@@ -133,7 +135,8 @@ class AWS(Dist):
             # Maybe here give info about number of invoked lambda for awsmonitor
             #self.logger.info(f'New lambda - 31')
 
-            while True:
+            while trials:
+                trials -= 1
                 try:
                     #my_before_time = time.time()
                     response = client.invoke(
@@ -158,16 +161,19 @@ class AWS(Dist):
                     # AWS site errors
                     self.logger.warn(error['Error']['Message'])
                 except RuntimeError as error:
-                    # Lambda runtime errors and errors from
-                    # lambdas that returned statusCode
-                    # different than 200
-                    print(error)
+                    # Lambda runtime errors and lambdas that
+                    # returned statusCode different than 200
+                    # (maybe also response processing errors)
+                    self.logger.warn(error)
                 except Exception as error:
                     # All other errors
-                    print(error)
+                    self.logger.warn(error)
                 else:
                     break
                 time.sleep(1)
+
+            # Note: lambda finishes before s3 object is created
+            #self.logger.info('Lambda finished :)')
 
             return response
 
@@ -189,9 +195,10 @@ class AWS(Dist):
             self.logger.info(f'New lambda - {lambda_num}')
         """
 
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(ranges)) as executor:
             executor.submit(AWS.process_execution, s3_client, processing_bucket, len(ranges), self.logger)
-            call_results = executor.map(lambda root_range: invoke_root_lambda(root_range, pickled_mapper), ranges)
+            futures = [executor.submit(invoke_root_lambda, root_range, pickled_mapper) for root_range in ranges]
             executor.shutdown(wait=True)
 
         wait_begin = time.time()
@@ -205,22 +212,42 @@ class AWS(Dist):
         #     time.sleep(1)
         # result = s3.get_object(s3_output_bucket, 'out.pickle')
 
+
         reduce_begin = time.time()
         # Get names of output files, download and reduce them
+        results = s3_client.list_objects_v2(Bucket=processing_bucket)
+        self.logger.info(f'Lambdas finished: {results["KeyCount"]}')
         filenames = s3_client.list_objects_v2(Bucket=processing_bucket)['Contents']
 
-        # need better way to do that
-        accumulator = pickle.loads(s3_client.get_object(
-            Bucket=processing_bucket,
-            Key=filenames[0]['Key']
-        )['Body'].read())
+        def get_from_s3(filename):
+            s3_client = boto3.client('s3', region_name=self.region)
+            return pickle.loads(s3_client.get_object(
+                        Bucket=processing_bucket,
+                        Key=filename['Key']
+                    )['Body'].read())
 
-        for filename in filenames[1:]:
-            file = pickle.loads(s3_client.get_object(
-                Bucket=processing_bucket,
-                Key=filename['Key']
-            )['Body'].read())
-            accumulator = reducer(accumulator, file)
+        files = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(filenames)) as executor:
+            futures = [executor.submit(get_from_s3, filename) for filename in filenames]
+            executor.shutdown(wait=True)
+            files = [future.result() for future in futures]
+
+        to_process = files
+        while len(to_process) > 1:
+            even_index_files = [to_process[i] for i in range(len(to_process)) if i % 2 == 0]
+            odd_index_files = [to_process[i] for i in range(len(to_process)) if i % 2 == 1]
+
+            with concurrent.futures.ThreadPoolExecutor(len(to_process)) as executor:
+                futures = [executor.submit(reducer, pair[0], pair[1]) for pair in zip(even_index_files, odd_index_files)]
+                executor.shutdown(wait=True)
+                to_process = [future.result() for future in futures]
+
+            if len(even_index_files) > len(odd_index_files):
+                to_process.append(even_index_files[-1])
+            elif len(even_index_files) < len(odd_index_files):
+                to_process.append(odd_index_files[-1])
+
+        reduction_result = to_process[0]
 
         # Clean up intermediate objects after we're done
         s3_resource.Bucket(processing_bucket).objects.all().delete()
@@ -234,7 +261,7 @@ class AWS(Dist):
 
         print(bench)
 
-        return accumulator
+        return reduction_result
         # reduced_output = pickle.loads(result)
         # return reduced_output
 
